@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Population Demographics Dashboard</title>
+<style>
+:root{
+  --bg:#f4f4f2;--card:#ffffff;--ink:#1a1a19;--ink2:#52514e;--muted:#898781;
+  --line:rgba(11,11,11,.10);--grid:rgba(128,128,128,.18);--accent:#2a78d6;--accent2:#eb6834;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#121211;--card:#1c1c1b;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--line:rgba(255,255,255,.10);--grid:rgba(128,128,128,.22)}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1200px;margin:0 auto;padding:20px 16px 32px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;justify-content:space-between;margin-bottom:14px}
+h1{font-size:22px;font-weight:600;margin:0}
+.sub{color:var(--ink2);font-size:13px}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:14px}
+.filters label{display:flex;flex-direction:column;font-size:12px;color:var(--ink2);gap:3px}
+select,button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:110px}
+button{cursor:pointer;min-width:0}
+button:hover{border-color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi small{display:block;color:var(--ink2);font-size:12px}
+.kpi b{display:block;font-size:28px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}
+.kpi em{font-style:normal;font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.card h2{font-size:14px;font-weight:600;margin:0 0 8px}
+.ch{position:relative;height:260px}
+.lg{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink2);margin-bottom:6px}
+.lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+footer{margin-top:16px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>Population demographics dashboard</h1>
+    <div class="sub" id="scope">Loading</div>
+  </div>
+</header>
+
+<div class="filters" aria-label="Filters">
+  <label>Year from<select id="yFrom"></select></label>
+  <label>Year to<select id="yTo"></select></label>
+  <label>Region<select id="region"></select></label>
+  <label>State<select id="state"></select></label>
+  <button id="reset" type="button">Reset filters</button>
+</div>
+
+<section class="kpis" aria-label="Key indicators">
+  <div class="kpi"><small>Total population</small><b id="k1">-</b><em>sum of Population</em></div>
+  <div class="kpi"><small>Urban population %</small><b id="k2">-</b><em>urban / (urban + rural)</em></div>
+  <div class="kpi"><small>Avg literacy rate</small><b id="k3">-</b><em>percent</em></div>
+  <div class="kpi"><small>Avg growth rate</small><b id="k4">-</b><em>percent</em></div>
+  <div class="kpi"><small>Natural increase</small><b id="k5">-</b><em>avg birth rate minus avg death rate</em></div>
+</section>
+
+<section class="grid">
+  <div class="card"><h2>Population by year</h2>
+    <div class="ch"><canvas id="c1" role="img" aria-label="Line chart of total population by year">Total population by year.</canvas></div></div>
+  <div class="card"><h2>Population by region</h2>
+    <div class="ch"><canvas id="c2" role="img" aria-label="Bar chart of total population by region">Total population by region.</canvas></div></div>
+  <div class="card"><h2>Urban vs rural population</h2>
+    <div class="lg" id="lg3"></div>
+    <div class="ch" style="height:224px"><canvas id="c3" role="img" aria-label="Donut chart of urban versus rural population">Urban versus rural population.</canvas></div></div>
+  <div class="card"><h2>Birth rate vs death rate by year</h2>
+    <div class="lg"><span><i style="background:#2a78d6"></i>Birth rate (solid)</span><span><i style="background:#eb6834"></i>Death rate (dashed)</span></div>
+    <div class="ch" style="height:224px"><canvas id="c4" role="img" aria-label="Line chart of average birth and death rate by year">Average birth and death rate by year.</canvas></div></div>
+  <div class="card"><h2>Average literacy rate by state</h2>
+    <div class="ch"><canvas id="c5" role="img" aria-label="Bar chart of average literacy rate by state">Average literacy rate by state.</canvas></div></div>
+  <div class="card"><h2>Density vs growth rate</h2>
+    <div class="ch"><canvas id="c6" role="img" aria-label="Scatter plot of density per square kilometre against growth rate">Density per km2 against growth rate.</canvas></div></div>
+</section>
+
+<footer>Source: Population_Demographics_Analysis_Dataset.csv. Blank Region, State or City values are shown as "Unknown". Blank numeric values are ignored in sums and averages.</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const DATA = [{"year":2006,"region":"Northeast","state":"Bihar","city":"Delhi","pop":10199436,"urban":2442377,"rural":59917,"growth":1.14,"lit":67.02,"density":886,"birth":22.4,"death":12.19},{"year":2019,"region":"Northeast","state":"UP","city":"Bangalore","pop":9609015,"urban":5116981,"rural":2468514,"growth":1.31,"lit":64.9,"density":792,"birth":28.32,"death":14.44},{"year":2014,"region":"North","state":"Tamil Nadu","city":"Bangalore","pop":818976,"urban":7086464,"rural":9500567,"growth":1.69,"lit":75.35,"density":418,"birth":24.17,"death":13.07},{"year":2010,"region":"West","state":"Maharashtra","city":"Pune","pop":15664708,"urban":3221268,"rural":9648528,"growth":2.72,"lit":77.38,"density":1193,"birth":18.41,"death":7.29},{"year":2007,"region":"East","state":"Bihar","city":"Pune","pop":4681004,"urban":9463918,"rural":2661307,"growth":0.62,"lit":88.66,"density":387,"birth":27.34,"death":12.01},{"year":2020,"region":"Central","state":"Karnataka","city":"Pune","pop":1293517,"urban":2465122,"rural":6735871,"growth":2.94,"lit":86.68,"density":86,"birth":10.85,"death":10.6},{"year":2006,"region":"Northeast","state":"Tamil Nadu","city":"Pune","pop":6195779,"urban":6129487,"rural":8018083,"growth":2.77,"lit":71.49,"density":137,"birth":10.2,"death":7.77},{"year":2018,"region":"South","state":"Rajasthan","city":"Chennai","pop":9071507,"urban":8461193,"rural":3540458,"growth":2.0,"lit":73.47,"density":209,"birth":15.01,"death":13.66},{"year":2022,"region":"Northeast","state":"Gujarat","city":"Delhi","pop":4042852,"urban":816931,"rural":1859160,"growth":1.7,"lit":80.18,"density":722,"birth":12.55,"death":12.8},{"year":2010,"region":"East","state":"Gujarat","city":"Pune","pop":15532856,"urban":4163634,"rural":4284366,"growth":0.84,"lit":79.31,"density":121,"birth":15.4,"death":6.28},{"year":2010,"region":"Northeast","state":"Karnataka","city":"Chennai","pop":8356946,"urban":3813456,"rural":9406750,"growth":1.37,"lit":90.17,"density":222,"birth":16.11,"death":10.7},{"year":2023,"region":"South","state":"UP","city":"Kolkata","pop":11293499,"urban":8477801,"rural":5349057,"growth":0.83,"lit":76.54,"density":704,"birth":19.11,"death":12.68},{"year":2020,"region":"West","state":"Gujarat","city":"Hyderabad","pop":19964574,"urban":461557,"rural":6059648,"growth":2.07,"lit":91.27,"density":728,"birth":22.21,"death":6.61},{"year":2003,"region":"Northeast","state":"Bihar","city":"Pune","pop":14995225,"urban":8887892,"rural":2453162,"growth":2.85,"lit":67.18,"density":1105,"birth":17.05,"death":14.92},{"year":2007,"region":"Central","state":"Gujarat","city":"Delhi","pop":4592709,"urban":5113565,"rural":5226156,"growth":1.35,"lit":90.37,"density":796,"birth":29.34,"death":11.05},{"year":2023,"region":"West","state":"Rajasthan","city":"Bangalore","pop":14453194,"urban":361632,"rural":7089893,"growth":2.53,"lit":70.65,"density":409,"birth":20.83,"death":13.62},{"year":2002,"region":"South","state":"Rajasthan","city":"Mumbai","pop":1812204,"urban":8045578,"rural":8967108,"growth":2.67,"lit":87.62,"density":1471,"birth":27.52,"death":10.46},{"year":2021,"region":"North","state":"Bihar","city":"Kolkata","pop":10498244,"urban":9434799,"rural":6584204,"growth":1.68,"lit":79.79,"density":1087,"birth":26.05,"death":8.09},{"year":2020,"region":"Northeast","state":"Gujarat","city":"Bangalore","pop":3430795,"urban":6121751,"rural":1555441,"growth":2.8,"lit":90.64,"density":1380,"birth":10.96,"death":13.35},{"year":2001,"region":"West","state":"Karnataka","city":"Delhi","pop":8126693,"urban":5104339,"rural":3142444,"growth":1.14,"lit":68.09,"density":411,"birth":19.43,"death":9.47},{"year":2023,"region":"Northeast","state":"Karnataka","city":"Delhi","pop":4581536,"urban":2954278,"rural":5875303,"growth":3.49,"lit":84.55,"density":67,"birth":26.13,"death":10.83},{"year":2011,"region":"Central","state":"Gujarat","city":"Kolkata","pop":5473666,"urban":768322,"rural":4403022,"growth":2.21,"lit":89.71,"density":773,"birth":28.13,"death":10.76},{"year":2005,"region":"Northeast","state":"Rajasthan","city":"Delhi","pop":13975553,"urban":2347245,"rural":2377628,"growth":1.5,"lit":87.18,"density":1097,"birth":22.66,"death":5.59},{"year":2001,"region":"West","state":"UP","city":"Delhi","pop":7196423,"urban":4332131,"rural":9006016,"growth":1.68,"lit":79.81,"density":833,"birth":28.64,"death":8.39},{"year":2020,"region":"East","state":"Maharashtra","city":"Pune","pop":2328569,"urban":678280,"rural":5485257,"growth":0.87,"lit":83.64,"density":188,"birth":23.27,"death":8.34},{"year":2000,"region":"West","state":"Rajasthan","city":"Hyderabad","pop":6582134,"urban":7786670,"rural":7666950,"growth":1.41,"lit":66.88,"density":967,"birth":14.17,"death":5.44},{"year":2011,"region":"South","state":"Gujarat","city":"Mumbai","pop":393275,"urban":766603,"rural":9111358,"growth":0.8,"lit":67.58,"density":100,"birth":21.17,"death":6.05},{"year":2021,"region":"West","state":"Rajasthan","city":"Pune","pop":9509247,"urban":7288079,"rural":3866311,"growth":1.52,"lit":69.36,"density":725,"birth":25.12,"death":10.71},{"year":2011,"region":"Central","state":"Rajasthan","city":"Bangalore","pop":12049288,"urban":5516530,"rural":4382454,"growth":0.88,"lit":88.98,"density":500,"birth":23.33,"death":8.22},{"year":2024,"region":"West","state":"Tamil Nadu","city":"Hyderabad","pop":6168225,"urban":9054317,"rural":1106579,"growth":1.82,"lit":65.86,"density":63,"birth":11.67,"death":10.02},{"year":2016,"region":"West","state":"Maharashtra","city":"Kolkata","pop":18052835,"urban":8012794,"rural":8777391,"growth":2.83,"lit":70.46,"density":1054,"birth":14.74,"death":9.83},{"year":2009,"region":"Central","state":"Rajasthan","city":"Chennai","pop":10546324,"urban":5823747,"rural":3185731,"growth":0.7,"lit":92.22,"density":812,"birth":23.76,"death":11.54},{"year":2015,"region":"Unknown","state":"Gujarat","city":"Delhi","pop":10847629,"urban":4147478,"rural":4531979,"growth":2.19,"lit":86.43,"density":1412,"birth":20.57,"death":13.5},{"year":2014,"region":"Central","state":"Rajasthan","city":"Kolkata","pop":2253092,"urban":7196060,"rural":284031,"growth":0.63,"lit":85.66,"density":1171,"birth":10.62,"death":7.27},{"year":2017,"region":"South","state":"Bihar","city":"Bangalore","pop":19510741,"urban":3245701,"rural":7634932,"growth":3.15,"lit":75.93,"density":941,"birth":24.77,"death":8.62},{"year":2018,"region":"Unknown","state":"Tamil Nadu","city":"Chennai","pop":13822265,"urban":8656117,"rural":86863,"growth":3.26,"lit":84.58,"density":1310,"birth":11.59,"death":10.57},{"year":2011,"region":"South","state":"UP","city":"Mumbai","pop":10073943,"urban":2964138,"rural":1745932,"growth":1.98,"lit":79.8,"density":243,"birth":13.7,"death":12.41},{"year":2022,"region":"South","state":"Maharashtra","city":"Bangalore","pop":506195,"urban":7408547,"rural":5904686,"growth":2.81,"lit":62.5,"density":414,"birth":28.09,"death":8.83},{"year":2019,"region":"Unknown","state":"Maharashtra","city":"Kolkata","pop":4562276,"urban":1320153,"rural":1257959,"growth":2.28,"lit":80.18,"density":937,"birth":16.3,"death":7.65},{"year":2024,"region":"West","state":"Tamil Nadu","city":"Hyderabad","pop":1589998,"urban":2652359,"rural":8054190,"growth":1.52,"lit":75.83,"density":587,"birth":10.69,"death":11.75},{"year":2018,"region":"Northeast","state":"UP","city":"Pune","pop":10119479,"urban":6394457,"rural":7284404,"growth":1.24,"lit":63.99,"density":638,"birth":10.35,"death":11.64},{"year":2018,"region":"East","state":"Rajasthan","city":"Chennai","pop":14246710,"urban":3221654,"rural":9668703,"growth":2.78,"lit":72.05,"density":1092,"birth":28.71,"death":12.57},{"year":2018,"region":"Northeast","state":"Gujarat","city":"Bangalore","pop":5023198,"urban":4030071,"rural":8855090,"growth":2.54,"lit":91.32,"density":1151,"birth":17.45,"death":9.98},{"year":2006,"region":"Central","state":"UP","city":"Pune","pop":10388036,"urban":5259929,"rural":3293596,"growth":1.67,"lit":88.13,"density":1371,"birth":22.42,"death":5.75},{"year":2011,"region":"Unknown","state":"Gujarat","city":"Pune","pop":10186496,"urban":6863361,"rural":6801613,"growth":3.38,"lit":91.99,"density":1179,"birth":18.28,"death":10.89},{"year":2008,"region":"South","state":"Maharashtra","city":"Pune","pop":1578362,"urban":9650786,"rural":8570949,"growth":0.67,"lit":85.1,"density":1034,"birth":14.27,"death":8.14},{"year":2006,"region":"North","state":"Rajasthan","city":"Hyderabad","pop":9811976,"urban":7305029,"rural":7538169,"growth":0.59,"lit":82.14,"density":828,"birth":27.55,"death":14.98},{"year":2017,"region":"East","state":"Gujarat","city":"Delhi","pop":16100729,"urban":4348577,"rural":5686091,"growth":1.75,"lit":64.87,"density":724,"birth":28.99,"death":10.81},{"year":2017,"region":"Northeast","state":"Maharashtra","city":"Bangalore","pop":15439102,"urban":177735,"rural":3177702,"growth":0.96,"lit":63.75,"density":731,"birth":29.76,"death":9.42},{"year":2024,"region":"West","state":"Unknown","city":"Pune","pop":14816396,"urban":1192535,"rural":9355283,"growth":2.13,"lit":68.64,"density":403,"birth":10.83,"death":12.62},{"year":2013,"region":"Unknown","state":"Tamil Nadu","city":"Delhi","pop":17708253,"urban":3537127,"rural":9825442,"growth":0.53,"lit":71.0,"density":857,"birth":11.01,"death":14.78},{"year":2017,"region":"North","state":"Rajasthan","city":"Pune","pop":11839876,"urban":6721346,"rural":66818,"growth":1.88,"lit":81.25,"density":53,"birth":27.16,"death":9.93},{"year":2008,"region":"North","state":"UP","city":"Chennai","pop":8693155,"urban":7752345,"rural":2141070,"growth":1.38,"lit":90.71,"density":481,"birth":13.52,"death":8.31},{"year":2020,"region":"North","state":"Unknown","city":"Kolkata","pop":13429659,"urban":3845645,"rural":9831372,"growth":1.11,"lit":91.18,"density":914,"birth":21.23,"death":9.81},{"year":2001,"region":"Northeast","state":"Tamil Nadu","city":"Chennai","pop":19195619,"urban":8891548,"rural":5546159,"growth":1.83,"lit":83.88,"density":1467,"birth":21.6,"death":11.94},{"year":2019,"region":"Central","state":"Gujarat","city":"Chennai","pop":10001940,"urban":233835,"rural":5725409,"growth":3.06,"lit":80.09,"density":734,"birth":23.24,"death":11.73},{"year":2014,"region":"East","state":"Karnataka","city":"Unknown","pop":11115829,"urban":2099357,"rural":4507525,"growth":2.47,"lit":68.55,"density":136,"birth":10.75,"death":12.45},{"year":2006,"region":"Central","state":"Tamil Nadu","city":"Delhi","pop":12529210,"urban":8753585,"rural":2752055,"growth":0.98,"lit":92.83,"density":408,"birth":16.17,"death":11.2},{"year":2011,"region":"North","state":"Maharashtra","city":"Pune","pop":4700215,"urban":8167287,"rural":4431825,"growth":2.0,"lit":83.49,"density":125,"birth":20.28,"death":14.54},{"year":2007,"region":"West","state":"Tamil Nadu","city":"Hyderabad","pop":14460703,"urban":9806915,"rural":4591499,"growth":3.3,"lit":78.67,"density":1091,"birth":13.49,"death":8.65},{"year":2014,"region":"North","state":"Rajasthan","city":"Bangalore","pop":8462054,"urban":null,"rural":2959115,"growth":1.82,"lit":63.64,"density":1140,"birth":28.88,"death":5.01},{"year":2002,"region":"Central","state":"Gujarat","city":"Hyderabad","pop":8382715,"urban":7687612,"rural":8032922,"growth":1.91,"lit":88.91,"density":1186,"birth":26.58,"death":6.49},{"year":2013,"region":"North","state":"Tamil Nadu","city":"Kolkata","pop":2675263,"urban":8581616,"rural":6393973,"growth":3.32,"lit":72.21,"density":693,"birth":12.79,"death":5.44},{"year":2016,"region":"North","state":"Rajasthan","city":"Delhi","pop":2291678,"urban":5978910,"rural":170017,"growth":0.91,"lit":91.52,"density":1005,"birth":23.42,"death":6.52},{"year":2003,"region":"Central","state":"Tamil Nadu","city":"Kolkata","pop":14627200,"urban":4804249,"rural":8007803,"growth":2.71,"lit":65.89,"density":634,"birth":18.2,"death":7.15},{"year":2017,"region":"Central","state":"Gujarat","city":"Bangalore","pop":12905566,"urban":1700319,"rural":8745751,"growth":1.4,"lit":61.7,"density":1314,"birth":16.23,"death":7.72},{"year":2007,"region":"West","state":"Bihar","city":"Kolkata","pop":2813049,"urban":4409764,"rural":4742277,"growth":3.1,"lit":75.22,"density":605,"birth":15.82,"death":5.25},{"year":2003,"region":"Central","state":"Karnataka","city":"Kolkata","pop":2253087,"urban":4873479,"rural":9151344,"growth":0.66,"lit":62.74,"density":622,"birth":23.25,"death":7.82},{"year":2001,"region":"West","state":"Tamil Nadu","city":"Chennai","pop":19779934,"urban":9232215,"rural":174429,"growth":3.47,"lit":62.16,"density":1200,"birth":28.07,"death":6.49},{"year":2005,"region":"South","state":"Tamil Nadu","city":"Hyderabad","pop":426924,"urban":9897921,"rural":3552481,"growth":2.81,"lit":84.98,"density":1036,"birth":26.73,"death":5.86},{"year":2021,"region":"South","state":"Bihar","city":"Kolkata","pop":437688,"urban":2397032,"rural":3084041,"growth":1.35,"lit":69.01,"density":1448,"birth":16.98,"death":10.81},{"year":2009,"region":"Central","state":"UP","city":"Hyderabad","pop":19262232,"urban":9020038,"rural":6378292,"growth":2.78,"lit":82.36,"density":169,"birth":24.15,"death":6.93},{"year":2003,"region":"North","state":"Tamil Nadu","city":"Hyderabad","pop":17897864,"urban":2576591,"rural":5773250,"growth":0.56,"lit":79.98,"density":843,"birth":20.55,"death":5.81},{"year":2021,"region":"East","state":"Rajasthan","city":"Delhi","pop":12857987,"urban":9746233,"rural":6975430,"growth":1.26,"lit":64.93,"density":627,"birth":18.81,"death":6.79},{"year":2017,"region":"North","state":"Gujarat","city":"Bangalore","pop":3940026,"urban":1902782,"rural":3134411,"growth":2.72,"lit":73.5,"density":1414,"birth":15.93,"death":13.68},{"year":2011,"region":"Central","state":"Rajasthan","city":"Chennai","pop":15851386,"urban":4621623,"rural":5743322,"growth":1.08,"lit":62.31,"density":579,"birth":11.62,"death":10.29},{"year":2001,"region":"West","state":"Gujarat","city":"Delhi","pop":12809686,"urban":1723957,"rural":7162533,"growth":2.08,"lit":74.76,"density":1139,"birth":13.85,"death":10.34},{"year":2009,"region":"North","state":"Tamil Nadu","city":"Chennai","pop":4608708,"urban":5934213,"rural":9985475,"growth":2.6,"lit":66.38,"density":1208,"birth":21.33,"death":7.72},{"year":2003,"region":"South","state":"UP","city":"Kolkata","pop":14858323,"urban":955892,"rural":1320591,"growth":2.15,"lit":63.37,"density":1477,"birth":24.57,"death":10.16},{"year":2013,"region":"Northeast","state":"Gujarat","city":"Mumbai","pop":6372372,"urban":5580989,"rural":8700000,"growth":3.16,"lit":71.09,"density":1245,"birth":10.74,"death":12.36},{"year":2015,"region":"Central","state":"Rajasthan","city":"Mumbai","pop":8990164,"urban":9862544,"rural":6377923,"growth":2.84,"lit":60.12,"density":938,"birth":17.58,"death":10.97},{"year":2014,"region":"North","state":"Rajasthan","city":"Chennai","pop":12283674,"urban":48462,"rural":2108581,"growth":1.11,"lit":86.52,"density":1025,"birth":13.32,"death":10.37},{"year":2007,"region":"Northeast","state":"Tamil Nadu","city":"Mumbai","pop":4238136,"urban":9228777,"rural":5682461,"growth":1.25,"lit":65.54,"density":640,"birth":22.04,"death":8.64},{"year":2013,"region":"North","state":"Tamil Nadu","city":"Bangalore","pop":10982559,"urban":4991686,"rural":3175495,"growth":2.41,"lit":81.9,"density":875,"birth":27.29,"death":11.31},{"year":2022,"region":"West","state":"Tamil Nadu","city":"Kolkata","pop":12220205,"urban":2934268,"rural":4299325,"growth":3.11,"lit":89.14,"density":99,"birth":28.59,"death":13.57},{"year":2024,"region":"West","state":"Karnataka","city":"Kolkata","pop":14387278,"urban":3960696,"rural":1853549,"growth":1.45,"lit":92.1,"density":943,"birth":27.7,"death":6.91},{"year":2007,"region":"West","state":"Gujarat","city":"Bangalore","pop":12739921,"urban":8762593,"rural":7910206,"growth":2.08,"lit":79.52,"density":376,"birth":27.45,"death":13.24},{"year":2020,"region":"Northeast","state":"Maharashtra","city":"Kolkata","pop":7299602,"urban":4989932,"rural":9163737,"growth":3.17,"lit":87.59,"density":1097,"birth":22.02,"death":9.84},{"year":2015,"region":"Unknown","state":"Karnataka","city":"Delhi","pop":10299925,"urban":9717114,"rural":7822294,"growth":2.81,"lit":75.92,"density":514,"birth":14.86,"death":14.79},{"year":2012,"region":"Northeast","state":"UP","city":"Chennai","pop":2956868,"urban":7867836,"rural":1009347,"growth":3.17,"lit":77.16,"density":1410,"birth":24.94,"death":7.62},{"year":2017,"region":"Central","state":"Karnataka","city":"Kolkata","pop":4108961,"urban":89831,"rural":9369533,"growth":1.33,"lit":79.14,"density":1176,"birth":24.49,"death":5.98},{"year":2014,"region":"Central","state":"Rajasthan","city":"Delhi","pop":13270459,"urban":9118986,"rural":1362062,"growth":2.57,"lit":83.45,"density":1078,"birth":13.33,"death":6.61},{"year":2020,"region":"South","state":"Karnataka","city":"Bangalore","pop":3296532,"urban":2370084,"rural":2436400,"growth":0.84,"lit":83.45,"density":488,"birth":13.9,"death":5.19},{"year":2023,"region":"South","state":"Bihar","city":"Kolkata","pop":18727273,"urban":2487852,"rural":300858,"growth":2.35,"lit":87.49,"density":1372,"birth":12.19,"death":8.65},{"year":2024,"region":"Central","state":"UP","city":"Bangalore","pop":10302881,"urban":801878,"rural":952203,"growth":1.41,"lit":81.59,"density":174,"birth":19.97,"death":8.2},{"year":2012,"region":"North","state":"UP","city":"Bangalore","pop":12059042,"urban":3757040,"rural":9078557,"growth":2.6,"lit":90.89,"density":207,"birth":16.43,"death":11.38},{"year":2008,"region":"Central","state":"UP","city":"Hyderabad","pop":834514,"urban":2281277,"rural":2995166,"growth":0.93,"lit":84.82,"density":373,"birth":28.0,"death":6.63},{"year":2014,"region":"East","state":"Karnataka","city":"Mumbai","pop":9511064,"urban":4744325,"rural":5036973,"growth":2.5,"lit":92.51,"density":758,"birth":10.73,"death":12.61},{"year":2012,"region":"South","state":"UP","city":"Delhi","pop":18746803,"urban":8726386,"rural":5845433,"growth":2.63,"lit":86.27,"density":1454,"birth":16.48,"death":8.23}];
+
+const BLUE='#2a78d6', ORANGE='#eb6834', MUTED='#898781', GRID='rgba(128,128,128,.2)';
+const $ = id => document.getElementById(id);
+const sum = (rows,k) => rows.reduce((s,r)=> s + (r[k]==null?0:r[k]),0);
+const avg = (rows,k) => { const v=rows.map(r=>r[k]).filter(x=>x!=null); return v.length? v.reduce((a,b)=>a+b,0)/v.length : null; };
+const fmtM = v => (v/1e6).toFixed(1)+'M';
+const group = (rows,key) => { const m=new Map(); rows.forEach(r=>{ if(!m.has(r[key])) m.set(r[key],[]); m.get(r[key]).push(r); }); return m; };
+
+const years = [...new Set(DATA.map(r=>r.year))].sort((a,b)=>a-b);
+const regions = [...new Set(DATA.map(r=>r.region))].sort();
+const states = [...new Set(DATA.map(r=>r.state))].sort();
+
+function fill(sel, items, firstLabel){
+  sel.innerHTML = '';
+  if(firstLabel){ const o=document.createElement('option'); o.value='All'; o.textContent=firstLabel; sel.appendChild(o); }
+  items.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+}
+fill($('yFrom'), years); fill($('yTo'), years);
+fill($('region'), regions, 'All regions'); fill($('state'), states, 'All states');
+
+function resetFilters(){
+  $('yFrom').value = years[0]; $('yTo').value = years[years.length-1];
+  $('region').value='All'; $('state').value='All';
+}
+resetFilters();
+
+function filtered(){
+  const a=+$('yFrom').value, b=+$('yTo').value, lo=Math.min(a,b), hi=Math.max(a,b);
+  const reg=$('region').value, st=$('state').value;
+  return DATA.filter(r => r.year>=lo && r.year<=hi && (reg==='All'||r.region===reg) && (st==='All'||r.state===st));
+}
+
+const base = (o={}) => Object.assign({
+  responsive:true, maintainAspectRatio:false,
+  plugins:{legend:{display:false}},
+  scales:{x:{grid:{display:false},ticks:{color:MUTED}}, y:{grid:{color:GRID},ticks:{color:MUTED}}}
+}, o);
+
+const c1 = new Chart($('c1'),{type:'line',data:{labels:[],datasets:[{data:[],borderColor:BLUE,backgroundColor:'rgba(42,120,214,.12)',fill:true,borderWidth:2,pointRadius:3,tension:.2}]},
+  options:base({plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{color:MUTED}},y:{grid:{color:GRID},ticks:{color:MUTED,callback:v=>fmtM(v)}}}})});
+
+const c2 = new Chart($('c2'),{type:'bar',data:{labels:[],datasets:[{data:[],backgroundColor:BLUE,borderRadius:4,maxBarThickness:26}]},
+  options:base({indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.parsed.x)}}},scales:{x:{grid:{color:GRID},ticks:{color:MUTED,callback:v=>fmtM(v)}},y:{grid:{display:false},ticks:{color:MUTED}}}})});
+
+const c3 = new Chart($('c3'),{type:'doughnut',data:{labels:['Urban','Rural'],datasets:[{data:[0,0],backgroundColor:[BLUE,ORANGE],borderWidth:2,borderColor:'rgba(128,128,128,.0)'}]},
+  options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.label+': '+fmtM(c.parsed)}}}}});
+
+const c4 = new Chart($('c4'),{type:'line',data:{labels:[],datasets:[
+  {label:'Birth rate',data:[],borderColor:BLUE,borderWidth:2,pointRadius:2,tension:.2},
+  {label:'Death rate',data:[],borderColor:ORANGE,borderWidth:2,borderDash:[6,4],pointRadius:2,pointStyle:'rect',tension:.2}]},
+  options:base()});
+
+const c5 = new Chart($('c5'),{type:'bar',data:{labels:[],datasets:[{data:[],backgroundColor:BLUE,borderRadius:4,maxBarThickness:20}]},
+  options:base({indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.x.toFixed(1)+'%'}}},scales:{x:{min:50,max:100,grid:{color:GRID},ticks:{color:MUTED,callback:v=>v+'%'}},y:{grid:{display:false},ticks:{color:MUTED}}}})});
+
+const c6 = new Chart($('c6'),{type:'scatter',data:{datasets:[{data:[],backgroundColor:'rgba(42,120,214,.75)',pointRadius:4,pointHoverRadius:6}]},
+  options:base({layout:{padding:8},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const r=c.raw; return ' '+r.city+', '+r.state+' ('+r.year+'): density '+r.x+', growth '+r.y+'%';}}}},
+    scales:{x:{title:{display:true,text:'Density per km2',color:MUTED},grid:{color:GRID},ticks:{color:MUTED}},y:{title:{display:true,text:'Growth rate (%)',color:MUTED},grid:{color:GRID},ticks:{color:MUTED}}}})});
+
+function render(){
+  const rows = filtered();
+  $('scope').textContent = rows.length + ' of ' + DATA.length + ' records selected';
+
+  const tot = sum(rows,'pop'), u = sum(rows,'urban'), ru = sum(rows,'rural');
+  const lit = avg(rows,'lit'), gr = avg(rows,'growth'), b = avg(rows,'birth'), d = avg(rows,'death');
+  $('k1').textContent = rows.length ? fmtM(tot) : '-';
+  $('k2').textContent = (u+ru) ? (100*u/(u+ru)).toFixed(1)+'%' : '-';
+  $('k3').textContent = lit!=null ? lit.toFixed(1)+'%' : '-';
+  $('k4').textContent = gr!=null ? gr.toFixed(2)+'%' : '-';
+  $('k5').textContent = (b!=null && d!=null) ? (b-d>=0?'+':'')+(b-d).toFixed(1) : '-';
+
+  const byYear = [...group(rows,'year').entries()].sort((a,b)=>a[0]-b[0]);
+  c1.data.labels = byYear.map(e=>e[0]);
+  c1.data.datasets[0].data = byYear.map(e=>sum(e[1],'pop'));
+  c1.update();
+
+  const byReg = [...group(rows,'region').entries()].map(e=>[e[0],sum(e[1],'pop')]).sort((a,b)=>b[1]-a[1]);
+  c2.data.labels = byReg.map(e=>e[0]); c2.data.datasets[0].data = byReg.map(e=>e[1]); c2.update();
+
+  c3.data.datasets[0].data = [u,ru]; c3.update();
+  const tt = u+ru;
+  $('lg3').innerHTML =
+    '<span><i style="background:'+BLUE+'"></i>Urban '+fmtM(u)+(tt?' ('+(100*u/tt).toFixed(1)+'%)':'')+'</span>'+
+    '<span><i style="background:'+ORANGE+'"></i>Rural '+fmtM(ru)+(tt?' ('+(100*ru/tt).toFixed(1)+'%)':'')+'</span>';
+
+  c4.data.labels = byYear.map(e=>e[0]);
+  c4.data.datasets[0].data = byYear.map(e=>avg(e[1],'birth'));
+  c4.data.datasets[1].data = byYear.map(e=>avg(e[1],'death'));
+  c4.update();
+
+  const byState = [...group(rows,'state').entries()].map(e=>[e[0],avg(e[1],'lit')]).filter(e=>e[1]!=null).sort((a,b)=>b[1]-a[1]);
+  c5.data.labels = byState.map(e=>e[0]); c5.data.datasets[0].data = byState.map(e=>e[1]); c5.update();
+
+  c6.data.datasets[0].data = rows.filter(r=>r.density!=null && r.growth!=null)
+    .map(r=>({x:r.density,y:r.growth,city:r.city,state:r.state,year:r.year}));
+  c6.update();
+}
+
+['yFrom','yTo','region','state'].forEach(id => $(id).addEventListener('change', render));
+$('reset').addEventListener('click', () => { resetFilters(); render(); });
+render();
+</script>
+</body>
+</html>
